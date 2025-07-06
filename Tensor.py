@@ -1,114 +1,79 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "f4f9f022-7963-4f65-b861-7319379f6b6e",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import numpy as np\n",
-    "from typing import List, NamedTuple, Callable\n",
-    "from utils import backprop, topological_sort\n",
-    "\n",
-    "\n",
-    "\"\"\"\n",
-    "base Tensor class, input the data as an n dim list\n",
-    "\"\"\"\n",
-    "\n",
-    "class Tensor():\n",
-    "  def __init__(self, data, label = None, requires_grad = True, prev = None):\n",
-    "    if not isinstance(data, np.ndarray):\n",
-    "      data = np.array(data)\n",
-    "\n",
-    "    self.data = data\n",
-    "    self.label = label\n",
-    "    self.requires_grad = requires_grad\n",
-    "    self.prev = prev\n",
-    "    self.shape = self.data.shape\n",
-    "    self.flatten_shape = self.data.flatten().shape[0]\n",
-    "    self.grad_prop = lambda node: None\n",
-    "    self.jacobian = None  # this represents the jacobian of the output wrt the tensor\n",
-    "\n",
-    "\n",
-    "  def __repr__(self):\n",
-    "    return(f\"Tensor object {self.label} with the shape of {self.shape}\")\n",
-    "\n",
-    "\n",
-    "  def __mul__(self, other: 'Tensor'):\n",
-    "    output_value = self.data*other.data\n",
-    "    out = Tensor(output_value, label = self.label + '*' + other.label, prev = [self, other])\n",
-    "\n",
-    "    def grad_prop(node):\n",
-    "      if self.jacobian is None:\n",
-    "        self.jacobian = np.zeros((node.flatten_shape, self.flatten_shape))\n",
-    "      if other.jacobian is None:\n",
-    "        other.jacobian = np.zeros((node.flatten_shape, other.flatten_shape))\n",
-    "\n",
-    "      self.jacobian += np.matmul(out.jacobian, np.diagflat(other.data.flatten(), k = 0))\n",
-    "      other.jacobian += np.matmul(out.jacobian, np.diagflat(self.data.flatten(), k = 0))\n",
-    "\n",
-    "    out.grad_prop = grad_prop\n",
-    "    return out\n",
-    "\n",
-    "  def __add__(self, other):\n",
-    "    output_value = self.data + other.data\n",
-    "    out = Tensor(output_value, label = self.label + '+' + other.label, prev = [self, other])\n",
-    "\n",
-    "    def grad_prop(node):\n",
-    "      if self.jacobian is None:\n",
-    "        self.jacobian = np.zeros((node.flatten_shape, self.flatten_shape))\n",
-    "      if other.jacobian is None:\n",
-    "        other.jacobian = np.zeros((node.flatten_shape, other.flatten_shape))\n",
-    "\n",
-    "      self.jacobian += np.matmul(out.jacobian, np.eye(self.flatten_shape))\n",
-    "      other.jacobian += np.matmul(out.jacobian, np.eye(other.flatten_shape))\n",
-    "\n",
-    "    out.grad_prop = grad_prop\n",
-    "    return out\n",
-    "\n",
-    "  def __matmul__(self, other):\n",
-    "    output_value = np.matmul(self.data, other.data)\n",
-    "    out = Tensor(output_value, label = self.label + '@' + other.label, prev = [self, other])\n",
-    "\n",
-    "    def grad_prop(node):\n",
-    "      if self.jacobian is None:\n",
-    "        self.jacobian = np.zeros((node.flatten_shape, self.flatten_shape))\n",
-    "      if other.jacobian is None:\n",
-    "        other.jacobian = np.zeros((node.flatten_shape, other.flatten_shape))\n",
-    "\n",
-    "      print(f\"{out.label, out.jacobian.shape} is the jacobian shape\")\n",
-    "      print(f\"{np.kron( np.transpose(other.data), np.eye(self.shape[0])).shape} is the shape of jacobian before prop of {self.label}\")\n",
-    "      print(f\"{ np.kron(self.data, np.eye(other.shape[1])).shape} is the shape of jacobian of beofre prop {other.label}\")\n",
-    "      self.jacobian += np.matmul(out.jacobian, np.kron(np.eye(self.shape[0]), np.transpose(other.data)))\n",
-    "      other.jacobian += np.matmul(out.jacobian, np.kron(self.data, np.eye(other.shape[1])))\n",
-    "\n",
-    "\n",
-    "    out.grad_prop = grad_prop\n",
-    "\n",
-    "    return out\n"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.9.1"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+import numpy as np
+from typing import List, NamedTuple, Callable
+
+
+"""
+base Tensor class, input the data as an n dim list
+"""
+
+class Tensor():
+  def __init__(self, data, label = None, requires_grad = True, prev = None):
+    if not isinstance(data, np.ndarray):
+      data = np.array(data)
+
+    self.data = data
+    self.label = label
+    self.requires_grad = requires_grad
+    self.prev = prev
+    self.shape = self.data.shape
+    self.flatten_shape = self.data.flatten().shape[0]
+    self.grad_prop = lambda node: None
+    self.jacobian = None  # this represents the jacobian of the output wrt the tensor
+
+
+  def __repr__(self):
+    return(f"Tensor object {self.label} with the shape of {self.shape}")
+
+
+  def __mul__(self, other: 'Tensor'):
+    output_value = self.data*other.data
+    out = Tensor(output_value, label = self.label + '*' + other.label, prev = [self, other])
+
+    def grad_prop(node):
+      if self.jacobian is None:
+        self.jacobian = np.zeros((node.flatten_shape, self.flatten_shape))
+      if other.jacobian is None:
+        other.jacobian = np.zeros((node.flatten_shape, other.flatten_shape))
+
+      self.jacobian += np.matmul(out.jacobian, np.diagflat(other.data.flatten(), k = 0))
+      other.jacobian += np.matmul(out.jacobian, np.diagflat(self.data.flatten(), k = 0))
+
+    out.grad_prop = grad_prop
+    return out
+
+  def __add__(self, other):
+    output_value = self.data + other.data
+    out = Tensor(output_value, label = self.label + '+' + other.label, prev = [self, other])
+
+    def grad_prop(node):
+      if self.jacobian is None:
+        self.jacobian = np.zeros((node.flatten_shape, self.flatten_shape))
+      if other.jacobian is None:
+        other.jacobian = np.zeros((node.flatten_shape, other.flatten_shape))
+
+      self.jacobian += np.matmul(out.jacobian, np.eye(self.flatten_shape))
+      other.jacobian += np.matmul(out.jacobian, np.eye(other.flatten_shape))
+
+    out.grad_prop = grad_prop
+    return out
+
+  def __matmul__(self, other):
+    output_value = np.matmul(self.data, other.data)
+    out = Tensor(output_value, label = self.label + '@' + other.label, prev = [self, other])
+
+    def grad_prop(node):
+      if self.jacobian is None:
+        self.jacobian = np.zeros((node.flatten_shape, self.flatten_shape))
+      if other.jacobian is None:
+        other.jacobian = np.zeros((node.flatten_shape, other.flatten_shape))
+
+      print(f"{out.label, out.jacobian.shape} is the jacobian shape")
+      print(f"{np.kron( np.transpose(other.data), np.eye(self.shape[0])).shape} is the shape of jacobian before prop of {self.label}")
+      print(f"{ np.kron(self.data, np.eye(other.shape[1])).shape} is the shape of jacobian of beofre prop {other.label}")
+      self.jacobian += np.matmul(out.jacobian, np.kron(np.eye(self.shape[0]), np.transpose(other.data)))
+      other.jacobian += np.matmul(out.jacobian, np.kron(self.data, np.eye(other.shape[1])))
+
+
+    out.grad_prop = grad_prop
+
+    return out
